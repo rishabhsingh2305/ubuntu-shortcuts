@@ -1,0 +1,8 @@
+sql() {
+  emulate -L zsh
+
+  sql_start || return
+  # Use the database name that the container was configured with.
+  _ubuntu_shortcuts_compose mysql exec mysql sh -c \
+    'exec mysql -uroot -p "${MYSQL_DATABASE:-appdb}"'
+}

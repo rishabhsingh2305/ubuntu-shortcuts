@@ -1,0 +1,27 @@
+# Shared helper: run Docker Compose against a compose file owned by this repo.
+# Usage: _ubuntu_shortcuts_compose <service> <compose arguments...>
+
+_ubuntu_shortcuts_compose() {
+  emulate -L zsh
+
+  if (( $# < 1 )); then
+    print -u2 "Usage: _ubuntu_shortcuts_compose <service> <compose arguments...>"
+    return 2
+  fi
+
+  local service=$1
+  shift
+
+  if [[ -z ${UBUNTU_SHORTCUTS_ROOT:-} ]]; then
+    print -u2 "_ubuntu_shortcuts_compose: UBUNTU_SHORTCUTS_ROOT is not set; run 'exec zsh'."
+    return 1
+  fi
+
+  local file="$UBUNTU_SHORTCUTS_ROOT/docker/$service/compose.yml"
+  if [[ ! -f $file ]]; then
+    print -u2 "_ubuntu_shortcuts_compose: compose file not found: $file"
+    return 1
+  fi
+
+  _docker_compose -f "$file" "$@"
+}

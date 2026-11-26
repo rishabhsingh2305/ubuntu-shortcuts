@@ -1,0 +1,5 @@
+# Docker Compose workflow for the Kafka stack in this repo.
+kafka_up() {
+  emulate -L zsh
+  _ubuntu_shortcuts_compose kafka up "$@"
+}

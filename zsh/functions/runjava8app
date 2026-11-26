@@ -1,0 +1,9 @@
+# Project helper: install ../common with Java 8, then run this project.
+runjava8app() {
+  emulate -L zsh
+
+  (
+    cd ../common || return
+    setjava8 && gradle install
+  ) && setjava8 && gradle run
+}

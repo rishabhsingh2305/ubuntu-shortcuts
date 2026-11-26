@@ -1,0 +1,4 @@
+gemini() {
+  emulate -L zsh
+  npx https://github.com/google-gemini/gemini-cli "$@"
+}

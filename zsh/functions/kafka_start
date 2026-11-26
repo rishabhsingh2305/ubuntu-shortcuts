@@ -1,0 +1,5 @@
+# Native (apt/service) Kafka installs. Kept separate from the Docker workflow.
+kafka_start() {
+  emulate -L zsh
+  sudo service zookeeper start && sudo service kafka start
+}

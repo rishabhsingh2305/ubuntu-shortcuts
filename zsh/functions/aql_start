@@ -1,0 +1,7 @@
+# The Aerospike container is expected to exist already; this repo does not
+# currently define an Aerospike compose file. Move these to local.zsh if they
+# are machine-specific.
+aql_start() {
+  emulate -L zsh
+  docker start aerospike
+}

@@ -1,0 +1,4 @@
+sql_stop() {
+  emulate -L zsh
+  _ubuntu_shortcuts_compose mysql stop mysql "$@"
+}

@@ -1,0 +1,4 @@
+aql_stop() {
+  emulate -L zsh
+  docker stop aerospike
+}

@@ -1,0 +1,16 @@
+# Shared helper: run Docker Compose with a v2 -> v1 fallback.
+# Private by convention (leading underscore); still autoloaded like any other file.
+
+_docker_compose() {
+  emulate -L zsh
+
+  if docker compose version >/dev/null 2>&1; then
+    docker compose "$@"
+  elif (( $+commands[docker-compose] )); then
+    docker-compose "$@"
+  else
+    print -u2 "_docker_compose: neither 'docker compose' nor 'docker-compose' is available."
+    print -u2 "Install docker-compose-v2 (recommended) or docker-compose."
+    return 127
+  fi
+}

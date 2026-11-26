@@ -1,0 +1,24 @@
+killport() {
+  emulate -L zsh
+
+  if (( $# != 1 )) || [[ -z $1 ]]; then
+    print -u2 "Usage: killport <port>"
+    return 1
+  fi
+
+  if (( ! $+commands[lsof] )); then
+    print -u2 "killport: lsof is not installed."
+    return 1
+  fi
+
+  local port=$1
+  local pids
+  pids=$(sudo lsof -t -i:"$port" 2>/dev/null)
+
+  if [[ -z $pids ]]; then
+    print "No process found on port $port"
+    return 0
+  fi
+
+  sudo kill -9 ${(f)pids}
+}

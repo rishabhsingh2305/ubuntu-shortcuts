@@ -1,0 +1,4 @@
+kafka_logs() {
+  emulate -L zsh
+  _ubuntu_shortcuts_compose kafka logs -f "$@"
+}

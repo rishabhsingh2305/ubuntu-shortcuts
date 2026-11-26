@@ -1,0 +1,4 @@
+aql_restart() {
+  emulate -L zsh
+  docker restart aerospike
+}

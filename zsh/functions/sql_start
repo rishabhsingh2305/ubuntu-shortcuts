@@ -1,0 +1,5 @@
+# MySQL workflow backed by docker/mysql/compose.yml.
+sql_start() {
+  emulate -L zsh
+  _ubuntu_shortcuts_compose mysql up -d mysql
+}

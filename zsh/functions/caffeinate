@@ -1,0 +1,272 @@
+# caffeinate - keep this machine awake despite lid close.
+# Autoloaded from $fpath via `autoload -Uz caffeinate`.
+
+emulate -L zsh
+setopt local_options no_nomatch
+
+local unit_base="caffeinate-keepawake"
+local unit="${unit_base}.service"
+local who="caffeinate"
+local detached=0
+local show_help=0
+local arg
+
+local -a positional
+for arg in "$@"; do
+  case $arg in
+    -h|--help)
+      show_help=1
+      ;;
+    -d|--detach)
+      detached=1
+      ;;
+    -*)
+      print -u2 "caffeinate: unknown option: $arg"
+      print -u2 "Run 'caffeinate help' for usage."
+      return 2
+      ;;
+    *)
+      positional+=("$arg")
+      ;;
+  esac
+done
+
+if (( ${#positional} == 1 )) && [[ ${positional[1]} == help ]]; then
+  show_help=1
+fi
+
+if (( show_help )); then
+  cat <<'EOF'
+caffeinate — keep this laptop awake despite lid close
+
+Usage:
+  caffeinate [options] [duration]
+  caffeinate status
+  caffeinate off
+  caffeinate help
+
+Duration:
+  10s, 10sec, 10m, 10min, 10h, 10hr, 1h30m
+  A bare number means minutes: caffeinate 10  ->  10 minutes
+  No duration means indefinitely: caffeinate
+
+Options:
+  -d, --detach   Run in the background; stop with 'caffeinate off'
+  -h, --help     Show this help
+
+Examples:
+  caffeinate 45m          Keep awake for 45 minutes
+  caffeinate -d 2h        Keep awake for 2 hours in the background
+  caffeinate status       Show end time and remaining time for active sessions
+  caffeinate off          Stop all caffeinate sessions now
+
+Notes:
+  - Blocks lid-close suspend and sleep.
+  - Inhibits GNOME idle blanking/locking while the lid is open.
+  - The screen still turns off if the lid is physically closed.
+  - Times use the device's current local timezone.
+  - No sudo or permanent system changes are made.
+  - Run 'systemd-inhibit --list' for raw inhibitor details.
+  - 'caffeinate off' immediately restores normal suspend and screen-lock behavior.
+  - 'caffinate' is an alias for this command.
+
+To remove permanently:
+  caffeinate off
+  delete zsh/functions/caffeinate from the ubuntu-shortcuts repo
+  run ./install.sh (or remove the symlink) and exec zsh
+EOF
+  return 0
+fi
+
+if (( ${#positional} == 1 )); then
+  case ${positional[1]} in
+    status)
+      local rows line pid label stamp end_epoch end_str rem rem_label d h m s now
+      local -a row_fields
+      rows=$(systemd-inhibit --list --no-pager 2>/dev/null | awk '$1 == "caffeinate" {print $4, $8, $10}')
+      if [[ -z $rows ]]; then
+        print "caffeinate: no active keep-awake session."
+      else
+        now=$(date +%s)
+        while IFS= read -r line; do
+          [[ -n $line ]] || continue
+          row_fields=(${(s: :)line})
+          pid=${row_fields[1]:-}
+          label=${row_fields[2]:-}
+          stamp=${row_fields[3]:-}
+          if [[ -n $stamp ]]; then
+            end_epoch=$(date -d "$stamp" +%s 2>/dev/null)
+            if [[ -n $end_epoch ]]; then
+              rem=$(( end_epoch - now ))
+              (( rem < 0 )) && rem=0
+              end_str=$(date -d "@$end_epoch" '+%Y-%m-%d %H:%M:%S %Z (%z)')
+              d=$(( rem / 86400 ))
+              h=$(( (rem % 86400) / 3600 ))
+              m=$(( (rem % 3600) / 60 ))
+              s=$(( rem % 60 ))
+              rem_label=""
+              (( d > 0 )) && rem_label+="${d}d "
+              (( h > 0 )) && rem_label+="${h}h "
+              (( m > 0 )) && rem_label+="${m}m "
+              rem_label+="${s}s"
+              print "caffeinate: ${label} (PID ${pid}) — ends ${end_str}, ${rem_label} left"
+            else
+              print "caffeinate: ${label} (PID ${pid}) — end time unavailable"
+            fi
+          else
+            print "caffeinate: ${label} (PID ${pid}) — no end time"
+          fi
+        done <<< "$rows"
+      fi
+      if systemctl --user is-active --quiet "$unit" 2>/dev/null; then
+        print "caffeinate: detached unit ${unit} is active."
+      fi
+      return 0
+      ;;
+    off|stop)
+      local stopped=0 list pid
+      if systemctl --user is-active --quiet "$unit" 2>/dev/null; then
+        if systemctl --user stop "$unit" 2>/dev/null; then
+          stopped=1
+        fi
+      fi
+
+      list=$(systemd-inhibit --list --no-pager 2>/dev/null | awk '$1 == "caffeinate" {print $4}')
+      local -a pids
+      pids=(${(f)list})
+      for pid in $pids; do
+        if [[ $pid == <-> ]] && kill "$pid" 2>/dev/null; then
+          stopped=1
+        fi
+      done
+
+      if (( stopped )); then
+        print "caffeinate: stopped; normal suspend and screen-lock rules apply."
+      else
+        print "caffeinate: no active keep-awake session found."
+      fi
+      return 0
+      ;;
+  esac
+fi
+
+local spec="${(L)${(j::)positional}}"
+spec="${spec// /}"
+local duration_label
+local infinite=0
+local seconds=0
+
+if [[ -z $spec || $spec == inf || $spec == infinity || $spec == forever || $spec == 0 ]]; then
+  infinite=1
+  duration_label="indefinitely"
+elif [[ $spec =~ '^[0-9]+$' ]]; then
+  seconds=$(( 10#$spec * 60 ))
+  duration_label="${spec}m"
+else
+  local rest=$spec
+  local num dur_unit
+  while [[ -n $rest ]]; do
+    if [[ $rest =~ '^([0-9]+)([a-z]+)(.*)$' ]]; then
+      num=$match[1]
+      dur_unit=$match[2]
+      rest=$match[3]
+    else
+      print -u2 "caffeinate: invalid duration: $spec"
+      print -u2 "Run 'caffeinate help' for usage."
+      return 2
+    fi
+
+    case $dur_unit in
+      s|sec|secs|second|seconds)
+        (( seconds += 10#$num ))
+        ;;
+      m|min|mins|minute|minutes)
+        (( seconds += 10#$num * 60 ))
+        ;;
+      h|hr|hrs|hour|hours)
+        (( seconds += 10#$num * 3600 ))
+        ;;
+      d|day|days)
+        (( seconds += 10#$num * 86400 ))
+        ;;
+      *)
+        print -u2 "caffeinate: unknown duration unit: $dur_unit"
+        print -u2 "Run 'caffeinate help' for usage."
+        return 2
+        ;;
+    esac
+  done
+  duration_label=$spec
+fi
+
+if (( ! infinite )) && (( seconds <= 0 )); then
+  print -u2 "caffeinate: duration must be greater than zero"
+  print -u2 "Run 'caffeinate help' for usage."
+  return 2
+fi
+
+local sleep_arg why
+local end_epoch end_time iso_end
+if (( infinite )); then
+  sleep_arg=infinity
+  why="caffeinate: indefinitely"
+else
+  sleep_arg=$seconds
+  end_epoch=$(( $(date +%s) + seconds ))
+  end_time=$(date -d "@${end_epoch}" '+%Y-%m-%d %H:%M:%S %Z (%z)')
+  iso_end=$(date -d "@${end_epoch}" '+%Y-%m-%dT%H:%M:%S%:z')
+  why="caffeinate: ${duration_label} until ${iso_end}"
+fi
+
+local -a keep_awake_cmd
+local gnome_idle_inhibit=0
+if [[ ${XDG_CURRENT_DESKTOP:-} == *GNOME* ]] && (( $+commands[gnome-session-inhibit] )); then
+  keep_awake_cmd=(gnome-session-inhibit --inhibit idle --reason "$why" --app-id caffeinate)
+  gnome_idle_inhibit=1
+fi
+keep_awake_cmd+=(systemd-inhibit --what=handle-lid-switch:idle:sleep \
+  --who="$who" --why="$why" --mode=block sleep "$sleep_arg")
+
+if (( detached )); then
+  if systemctl --user is-active --quiet "$unit" 2>/dev/null; then
+    print -u2 "caffeinate: a detached session is already running."
+    print -u2 "Run 'caffeinate status' or 'caffeinate off' first."
+    return 1
+  fi
+
+  systemctl --user reset-failed "$unit" 2>/dev/null
+
+  if (( infinite )); then
+    print "caffeinate: starting detached session (indefinite)."
+  else
+    print "caffeinate: starting detached session for ${duration_label} (until ${end_time})."
+  fi
+  if systemd-run --user --quiet --unit="$unit_base" --collect \
+      --description="$why" \
+      "${keep_awake_cmd[@]}"; then
+    if (( gnome_idle_inhibit )); then
+      print "caffeinate: GNOME idle blanking/locking is inhibited while active."
+    fi
+    print "caffeinate: stop it with 'caffeinate off'."
+    return 0
+  else
+    print -u2 "caffeinate: failed to start the detached session."
+    return 1
+  fi
+fi
+
+if (( infinite )); then
+  print "caffeinate: keeping awake indefinitely (Ctrl+C to stop)."
+else
+  print "caffeinate: keeping awake for ${duration_label} (until ${end_time})."
+fi
+if (( gnome_idle_inhibit )); then
+  print "caffeinate: GNOME idle blanking/locking is inhibited while active."
+fi
+print "caffeinate: lid-close suspend is blocked; Ctrl+C to stop."
+
+"${keep_awake_cmd[@]}"
+local rc=$?
+
+print "caffeinate: released; normal suspend and screen-lock rules apply."
+return $rc

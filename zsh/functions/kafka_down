@@ -1,0 +1,4 @@
+kafka_down() {
+  emulate -L zsh
+  _ubuntu_shortcuts_compose kafka down "$@"
+}

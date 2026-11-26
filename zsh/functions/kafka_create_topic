@@ -1,0 +1,21 @@
+kafka_create_topic() {
+  emulate -L zsh
+
+  if (( $# < 1 )) || [[ -z $1 ]]; then
+    print -u2 "Usage: kafka_create_topic <topic> [extra topic args...]"
+    return 1
+  fi
+
+  local topic=$1
+  shift
+  local kafka_home=${KAFKA_HOME:-/opt/kafka}
+  local bin="$kafka_home/bin/kafka-topics.sh"
+
+  if [[ ! -x $bin ]]; then
+    print -u2 "kafka_create_topic: not found: $bin (set KAFKA_HOME)"
+    return 1
+  fi
+
+  "$bin" --create --bootstrap-server "${KAFKA_BOOTSTRAP_SERVERS:-localhost:9092}" \
+    --topic "$topic" "$@"
+}

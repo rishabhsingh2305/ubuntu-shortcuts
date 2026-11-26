@@ -1,0 +1,8 @@
+# Local secrets and machine-specific configuration
+docker/mysql/.env
+.env
+
+# Backups and transient files
+*.bak
+*.swp
+.DS_Store

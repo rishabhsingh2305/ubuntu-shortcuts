@@ -1,0 +1,5 @@
+# Project helper: select the Java 8 / Gradle 3.3 toolchain through SDKMAN.
+setjava8() {
+  emulate -L zsh
+  sdk use gradle 3.3 && sdk use java 8.0.452-zulu
+}
