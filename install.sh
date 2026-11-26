@@ -8,8 +8,11 @@
 #
 # Safe to run repeatedly. No sudo is used for anything under $HOME.
 #
+# No checkout? Use bootstrap.sh instead; it downloads a tarball and then calls
+# this script.
+#
 # Usage:
-#   ./install.sh [--dry-run] [--copy] [--uninstall] [zsh] [docker] [all]
+#   ./install.sh [--dry-run] [--uninstall] [zsh] [docker] [all]
 #
 # Modules:
 #   zsh      Link the zsh entrypoint and aliases (default)
@@ -18,7 +21,6 @@
 #
 # Options:
 #   --dry-run     Print actions without changing anything
-#   --copy        Install a detached copy under ~/.local/share/ubuntu-shortcuts
 #   --uninstall   Remove links that point into this repo and restore the latest backup
 #   -h, --help    Show this help text
 
@@ -27,21 +29,14 @@ set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 REPO_ROOT=$SCRIPT_DIR
 
-# If this script was fetched on its own (curl | bash), clone the repository.
+# This script expects a checkout (or a payload installed by bootstrap.sh).
+# Use bootstrap.sh when there is no checkout:
+#   curl -fsSL https://raw.githubusercontent.com/rishabhsingh2305/ubuntu-shortcuts/main/bootstrap.sh | bash
 if [[ ! -f "$REPO_ROOT/lib/common.sh" ]]; then
-  if ! command -v git >/dev/null 2>&1; then
-    printf '[error] git is required to bootstrap the repository.\n' >&2
-    exit 1
-  fi
-  INSTALL_ROOT=${XDG_DATA_HOME:-$HOME/.local/share}/ubuntu-shortcuts
-  if [[ ! -d "$INSTALL_ROOT/.git" ]]; then
-    printf '[info] cloning %s into %s\n' "${UBUNTU_SHORTCUTS_REPO:-https://github.com/rishabhsingh2305/ubuntu-shortcuts.git}" "$INSTALL_ROOT"
-    mkdir -p -- "$(dirname -- "$INSTALL_ROOT")"
-    git clone --depth 1 "${UBUNTU_SHORTCUTS_REPO:-https://github.com/rishabhsingh2305/ubuntu-shortcuts.git}" "$INSTALL_ROOT"
-  else
-    git -C "$INSTALL_ROOT" pull --ff-only
-  fi
-  REPO_ROOT=$INSTALL_ROOT
+  printf '[error] install.sh must run from a checkout or an installed payload.\n' >&2
+  printf 'Use bootstrap.sh for a no-clone install:\n' >&2
+  printf '  curl -fsSL https://raw.githubusercontent.com/rishabhsingh2305/ubuntu-shortcuts/main/bootstrap.sh | bash\n' >&2
+  exit 1
 fi
 
 # shellcheck source=lib/common.sh
@@ -51,7 +46,6 @@ ZSH_CUSTOM=${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}
 STATE_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/ubuntu-shortcuts
 BACKUP_DIR="$STATE_DIR/backups/$(date +%Y%m%d-%H%M%S)"
 DRY_RUN=0
-COPY_MODE=0
 UNINSTALL=0
 DO_ZSH=1
 DO_DOCKER=1
@@ -68,7 +62,7 @@ Makes this repository the source of truth for the zsh configuration:
 Safe to run repeatedly. No sudo is used for anything under $HOME.
 
 Usage:
-  ./install.sh [--dry-run] [--copy] [--uninstall] [zsh] [docker] [all]
+  ./install.sh [--dry-run] [--uninstall] [zsh] [docker] [all]
 
 Modules:
   zsh      Link the zsh entrypoint and aliases (default)
@@ -77,7 +71,6 @@ Modules:
 
 Options:
   --dry-run     Print actions without changing anything
-  --copy        Install a detached copy under ~/.local/share/ubuntu-shortcuts
   --uninstall   Remove links that point into this repo and restore the latest backup
   -h, --help    Show this help text
 EOF
@@ -87,9 +80,6 @@ while (( $# > 0 )); do
   case $1 in
     --dry-run)
       DRY_RUN=1
-      ;;
-    --copy)
-      COPY_MODE=1
       ;;
     --uninstall)
       UNINSTALL=1
@@ -295,19 +285,6 @@ main() {
   fi
 
   (( DRY_RUN )) && info "dry run: no files will be changed"
-
-  if (( COPY_MODE )); then
-    local install_root=${XDG_DATA_HOME:-$HOME/.local/share}/ubuntu-shortcuts
-    if (( DRY_RUN )); then
-      info "would copy zsh/ and docker/ to $install_root"
-    else
-      mkdir -p -- "$install_root"
-      rm -rf -- "$install_root/zsh" "$install_root/docker"
-      cp -a -- "$REPO_ROOT/zsh" "$REPO_ROOT/docker" "$install_root/"
-      info "copied zsh/ and docker/ to $install_root"
-    fi
-    REPO_ROOT=$install_root
-  fi
 
   if (( DO_ZSH )); then
     install_zsh

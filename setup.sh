@@ -5,6 +5,9 @@
 # Run this once on a new machine, as your normal user (not root):
 #   ./setup.sh
 #
+# No clone? Use bootstrap.sh:
+#   curl -fsSL .../bootstrap.sh | bash -s -- --provision
+#
 # It installs the base packages, Oh My Zsh, SDKMAN!, Docker, and then calls
 # ./install.sh to link the repository-managed zsh configuration.
 
@@ -13,6 +16,13 @@ set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
 REPO_ROOT=$SCRIPT_DIR
 DRY_RUN=0
+
+if [[ ! -f "$REPO_ROOT/lib/common.sh" ]]; then
+  printf '[error] setup.sh must run from a checkout or an installed payload.\n' >&2
+  printf 'Use bootstrap.sh --provision for a no-clone install:\n' >&2
+  printf '  curl -fsSL https://raw.githubusercontent.com/rishabhsingh2305/ubuntu-shortcuts/main/bootstrap.sh | bash -s -- --provision\n' >&2
+  exit 1
+fi
 
 # shellcheck source=lib/common.sh
 source "$REPO_ROOT/lib/common.sh"

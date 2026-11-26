@@ -1,8 +1,8 @@
 # ubuntu-shortcuts
 
-Personal Ubuntu setup, kept in git. This repository is the **source of truth**
-for my zsh configuration: the installer symlinks the repo into Oh My Zsh, so
-the next shell reads the repo files directly.
+Personal Ubuntu setup, kept in git. The repository is the **source of truth**:
+a development machine can symlink the checkout into Oh My Zsh, while any other
+machine can bootstrap the same files from a tarball without git.
 
 ## What it manages
 
@@ -11,46 +11,69 @@ the next shell reads the repo files directly.
 - `zsh/autoload.zsh` — discovers functions and sets up `$fpath`
 - `docker/kafka/compose.yml` — local Kafka + Zookeeper
 - `docker/mysql/compose.yml` — local MySQL (passwords come from `.env`)
+- `bootstrap.sh` — no-clone tarball installer
 - `setup.sh` — fresh-machine provisioning
-- `install.sh` — idempotent linker for the current machine
+- `install.sh` — idempotent linker for a checkout or installed payload
 
 ## Quick start
 
-### New machine
+### New machine (no clone)
 
 ```bash
-git clone https://github.com/rishabhsingh2305/ubuntu-shortcuts.git
-cd ubuntu-shortcuts
-./setup.sh          # packages, Oh My Zsh, SDKMAN!, Docker, then install.sh
+curl -fsSL https://raw.githubusercontent.com/rishabhsingh2305/ubuntu-shortcuts/main/bootstrap.sh \
+  -o /tmp/ubuntu-shortcuts-bootstrap.sh
+bash /tmp/ubuntu-shortcuts-bootstrap.sh --provision
 exec zsh
 ```
 
-`setup.sh` must run as your normal user, not with `sudo`. Log out and back in
-after it finishes so the Docker group applies.
+Downloading first keeps the terminal available for the `sudo`/`chsh` prompts in
+the provisioning step. `bootstrap.sh` uses `curl` + `tar`, not git.
+`--provision` still installs git as part of the base developer packages. It
+downloads a tarball into `~/.local/share/ubuntu-shortcuts`, installs the zsh
+config, and runs the package setup (Oh My Zsh, SDKMAN!, Docker). Run it as your
+normal user, not with `sudo`; log out and back in after it finishes so the
+Docker group applies.
 
-### Existing machine
+### Existing machine or update
 
 ```bash
-git clone https://github.com/rishabhsingh2305/ubuntu-shortcuts.git
+curl -fsSL https://raw.githubusercontent.com/rishabhsingh2305/ubuntu-shortcuts/main/bootstrap.sh | bash
+exec zsh
+```
+
+Re-running the same command refreshes the payload and preserves
+`docker/mysql/.env`. Pin a tag if you want reproducible installs:
+
+```bash
+curl -fsSL .../bootstrap.sh | bash -s -- --ref v1.0.0
+```
+
+### Development machine (edit and commit)
+
+```bash
+git clone git@github.com:rishabhsingh2305/ubuntu-shortcuts.git
 cd ubuntu-shortcuts
 ./install.sh
 exec zsh
 ```
 
-The installer only creates two links:
+This is the live-symlink mode: edit files in the repo, `exec zsh`, commit.
+
+Both modes create the same two links:
 
 ```
-~/.oh-my-zsh/custom/autoload.zsh  -> <repo>/zsh/autoload.zsh
-~/.oh-my-zsh/custom/aliases.zsh   -> <repo>/zsh/aliases.zsh
+~/.oh-my-zsh/custom/autoload.zsh  -> <checkout-or-payload>/zsh/autoload.zsh
+~/.oh-my-zsh/custom/aliases.zsh   -> <checkout-or-payload>/zsh/aliases.zsh
 ```
 
-Everything else (functions, compose files) stays in the repo and is discovered
-at shell startup.
+Everything else (functions, compose files) is discovered from the linked
+payload at shell startup.
 
 ## Layout
 
 ```
 .
+├── bootstrap.sh                # no-clone tarball installer
 ├── install.sh                  # safe, rerunnable linker
 ├── setup.sh                    # fresh Ubuntu provisioning
 ├── lib/common.sh               # backup/link helpers
@@ -81,6 +104,7 @@ at shell startup.
 │   ├── kafka/compose.yml
 │   └── mysql/compose.yml
 └── test/
+    ├── bootstrap_test.sh
     ├── install_test.sh
     └── lint.sh
 ```
@@ -115,6 +139,10 @@ This is the loop this repo is designed for:
    directory; no reinstall is needed).
 4. Test it.
 5. `git add` / `git commit`.
+
+This workflow applies to the development clone. On machines installed with
+`bootstrap.sh`, push the commit from the development clone and re-run the
+bootstrap command to refresh their payload.
 
 For example, the `caffinate` typo alias was added like this:
 
@@ -218,34 +246,51 @@ export KAFKA_HOME="$HOME/tools/kafka"
 
 ## Installer
 
+### No-clone bootstrap
+
+```bash
+./bootstrap.sh                  # install/update from the GitHub tarball
+./bootstrap.sh --provision      # packages, Oh My Zsh, SDKMAN!, Docker, then config
+./bootstrap.sh --ref v1.0.0     # pin a branch or tag
+./bootstrap.sh --from ./path    # local directory or tarball (offline/testing)
+./bootstrap.sh --uninstall      # remove the links; keep the payload
+```
+
+- Downloads a tarball; does **not** run `git clone`.
+- Installs the payload at `~/.local/share/ubuntu-shortcuts`.
+- Re-run it to update; `docker/mysql/.env` is preserved.
+- The payload is intentionally not a git checkout. Use the checkout mode below
+  when you want to edit and commit.
+- `bootstrap.sh` executes code downloaded from GitHub. Inspect it first or pin a
+  tag with `--ref` if you want a reproducible install.
+
+### Checkout
+
 ```bash
 ./install.sh                 # zsh + docker
 ./install.sh zsh             # only zsh
 ./install.sh --dry-run       # show actions, change nothing
-./install.sh --copy          # detached copy under ~/.local/share/ubuntu-shortcuts
 ./install.sh --uninstall     # remove repo-owned links; restore latest backup
 ```
 
+- `install.sh` expects a checkout or an installed payload; use
+  `bootstrap.sh` when there is neither. It deliberately has no clone/copy mode.
 - Never uses `sudo` for files under `$HOME`.
 - Existing files are backed up to
   `~/.local/state/ubuntu-shortcuts/backups/<timestamp>/` before replacement.
 - Re-running is a no-op.
 - Set `ZSH_CUSTOM=/path/to/custom` before running if you moved Oh My Zsh's
   custom directory; the default is `~/.oh-my-zsh/custom`.
-- If run outside a checkout, it clones
-  `https://github.com/rishabhsingh2305/ubuntu-shortcuts.git` into
-  `~/.local/share/ubuntu-shortcuts` first.
-- `--copy` is for when you do not want the live config tied to the checkout;
-  re-run `./install.sh --copy` after pulling changes.
 
 ## Tests
 
 ```bash
-./test/lint.sh          # bash/zsh syntax, shellcheck, compose config
-./test/install_test.sh  # isolated $HOME; dry run, idempotency, copy mode, uninstall
+./test/lint.sh            # bash/zsh syntax, shellcheck, compose config
+./test/install_test.sh    # isolated $HOME; dry run, idempotency, migration, uninstall
+./test/bootstrap_test.sh  # no-clone directory/tarball install, .env preservation, uninstall
 ```
 
-CI runs both on every push and pull request.
+CI runs all three on every push and pull request.
 
 ## Not managed (yet)
 

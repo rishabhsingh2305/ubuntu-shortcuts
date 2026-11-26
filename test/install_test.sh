@@ -61,19 +61,9 @@ result=$(zsh -dfc '
 ')
 [[ $result == ok ]] || fail "zsh smoke test failed: $result"
 
-# Copy mode installs a detached payload and links to it.
-"$ROOT/install.sh" zsh >/dev/null
+# Uninstall removes the links and restores the pre-install files.
 "$ROOT/install.sh" --uninstall >/dev/null
 [[ ! -L $ZSH_CUSTOM/autoload.zsh ]] || fail "uninstall left autoload.zsh"
 [[ ! -L $ZSH_CUSTOM/aliases.zsh ]] || fail "uninstall left aliases.zsh"
-
-"$ROOT/install.sh" --copy zsh >/dev/null
-INSTALL_ROOT="$TMP/.local/share/ubuntu-shortcuts"
-[[ -L $ZSH_CUSTOM/autoload.zsh ]] || fail "copy mode did not link autoload.zsh"
-[[ $(readlink -f -- "$ZSH_CUSTOM/autoload.zsh") == "$INSTALL_ROOT/zsh/autoload.zsh" ]] ||
-  fail "copy mode did not link to the installed copy"
-
-"$ROOT/install.sh" --uninstall >/dev/null
-[[ ! -L $ZSH_CUSTOM/autoload.zsh ]] || fail "copy-mode uninstall left autoload.zsh"
 
 printf 'install test passed\n'

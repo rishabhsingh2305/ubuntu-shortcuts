@@ -21,3 +21,6 @@ jobs:
 
       - name: Isolated installer test
         run: ./test/install_test.sh
+
+      - name: No-clone bootstrap test
+        run: ./test/bootstrap_test.sh

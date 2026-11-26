@@ -7,14 +7,14 @@ set -euo pipefail
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
 cd "$ROOT"
 
-bash -n install.sh setup.sh lib/common.sh test/*.sh
+bash -n install.sh setup.sh bootstrap.sh lib/common.sh test/*.sh
 printf 'bash syntax: ok\n'
 
 zsh -n zsh/autoload.zsh zsh/aliases.zsh zsh/functions/*
 printf 'zsh syntax: ok\n'
 
 if command -v shellcheck >/dev/null 2>&1; then
-  shellcheck install.sh setup.sh lib/common.sh test/*.sh
+  shellcheck install.sh setup.sh bootstrap.sh lib/common.sh test/*.sh
   printf 'shellcheck: ok\n'
 else
   printf 'shellcheck: not installed, skipped\n'
